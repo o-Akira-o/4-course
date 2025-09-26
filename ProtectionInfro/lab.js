@@ -334,6 +334,49 @@ async function testDiscreteLog() {
     console.error("Ошибка: ", err.message);
   }
 }
+async function diffieHellmanKeyExchange() {
+  console.log("\n=== Диффи-Хеллман: построение общего ключа ===");
+  console.log("Выберите способ ввода параметров:");
+  console.log("1. Ввести вручную");
+  console.log("2. Сгенерировать автоматически");
+
+  const choice = await askQuestion("Ваш выбор (1-2): ");
+
+  let p, g, X1, X2;
+
+  if (choice === "1") {
+    p = parseInt(await askQuestion("Введите простое число p: "));
+    g = parseInt(await askQuestion("Введите основание g: "));
+    X1 = parseInt(await askQuestion("Введите секретный ключ X1: "));
+    X2 = parseInt(await askQuestion("Введите секретный ключ X2: "));
+  } else if (choice === "2") {
+    // Генерация простого p
+    p = generatePrime(1000, 5000);
+    // Выбор g — простое число, меньшее p, обычно простое или первообразное (упрощенно)
+    g = generatePrime(2, p - 2);
+    X1 = generateRandomNumber(2, p - 2);
+    X2 = generateRandomNumber(2, p - 2);
+    console.log(
+      `Сгенерированные параметры:\np = ${p}\ng = ${g}\nX1 = ${X1}\nX2 = ${X2}`
+    );
+  } else {
+    console.log("Некорректный выбор. Возврат в меню.");
+    return;
+  }
+
+  // Проверки (например, p — простое, g — первообразное — упрощенно)
+  // Для простоты, можно пропустить или добавить базовые проверки.
+
+  // Вычисление публичных ключей
+  const Y1 = modExp(g, X1, p);
+  const Y2 = modExp(g, X2, p);
+
+  // Построение общего ключа
+  const sharedKey = modExp(Y2, X1, p); // или modExp(Y1, X2, p)
+
+  console.log(`\nОбщий ключ (shared secret): ${sharedKey}`);
+  console.log(`Публичные ключи:\nY1 = ${Y1}\nY2 = ${Y2}\n`);
+}
 async function showMenu() {
   console.log("=== КРИПТОГРАФИЧЕСКАЯ БИБЛИОТЕКА ===");
   console.log("1. Быстрое возведение в степень по модулю");
@@ -341,9 +384,10 @@ async function showMenu() {
   console.log("3. Тест простоты Ферма");
   console.log("4. Генерация простого числа");
   console.log("5. Нахождение дискретного логарифма");
+  console.log("6. Построение общего ключа по схеме Диффи-Хеллмана");
   console.log("0. Выход");
 
-  const choice = await askQuestion("\nВыберите опцию (0-5): ");
+  const choice = await askQuestion("\nВыберите опцию (0-6): ");
 
   switch (choice) {
     case "1":
@@ -360,6 +404,9 @@ async function showMenu() {
       break;
     case "5":
       await testDiscreteLog();
+      break;
+    case "6":
+      await diffieHellmanKeyExchange();
       break;
     case "0":
       console.log("До свидания!");
