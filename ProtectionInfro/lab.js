@@ -432,7 +432,7 @@ async function secretShareEncrypt() {
   const filepath = await askQuestion("Введите путь к файлу для шифрования: ");
   const data = fs.readFileSync(filepath);
   const hash = crypto.createHash("sha256").update(data).digest("hex");
-  const secret = parseInt(hash.slice(0, 8), 16);
+  const secret = parseInt(hash.slice(0, 8), 16); // Используем первые 8 символов хеша
 
   let p;
   const pInput = await askQuestion(
@@ -462,9 +462,19 @@ async function secretShareEncrypt() {
   console.log(
     `Создано ${shares.length} частей файла. Для восстановления требуется минимум ${threshold} частей.`
   );
+
+  // После генерации и сохранения частей, сразу восстановим секрет из всех частей (или из threshold)
+  // Для проверки, возьмем первые 'threshold' частей
+  const subsetShares = shares.slice(0, threshold);
+  const recoveredSecret = reconstructSecret(subsetShares, p);
+  const originalHashCode = hash.slice(0, 8);
+  console.log(
+    `Восстановленный секрет (из первых ${threshold} частей): ${recoveredSecret}`
+  );
+  console.log(`Исходный секрет (хэш файла, первые 8 символов): ${secret}`);
 }
 
-async function secretShareDecrypt() {
+async function secretShareDecrypt(originalHash) {
   const shareCount = await askQuestion(
     "Введите число частей для восстановления: "
   );
@@ -485,6 +495,7 @@ async function secretShareDecrypt() {
       return;
     }
   }
+
   const pInput = await askQuestion(
     "Введите p (если знаете, оставьте пустым для ввода): "
   );
@@ -497,8 +508,6 @@ async function secretShareDecrypt() {
 
   const secret = reconstructSecret(shares, p);
   console.log(`Восстановленный секрет: ${secret}`);
-  // Тут можно реализовать восстановление файла из секрета, если есть логика
-  // Например, если секрет — хэш файла, то можно искать или восстанавливать файл
 }
 
 async function showMenu() {
