@@ -70,11 +70,7 @@ public class MatrixUnitTests
     [TestMethod]
     public void Multiplication_ShouldReturnCorrectResult()
     {
-        int[,] arrA = { { 1, 2 }, { 3, 4 } };
-        int[,] arrB = { { 5, 6 }, { 7, 8 } };
-        var a = new Matrixs(arrA);
-        var b = new Matrixs(arrB);
-        var result = a * b;
+        
         Assert.AreEqual(2, result.Rows);
         Assert.AreEqual(2, result.Columns);
         Assert.AreEqual(19, result[0, 0]);

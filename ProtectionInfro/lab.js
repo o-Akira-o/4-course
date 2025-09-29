@@ -1,4 +1,6 @@
 const readline = require("readline");
+const fs = require("fs");
+const crypto = require("crypto");
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -145,6 +147,54 @@ function askQuestion(question) {
       resolve(answer);
     });
   });
+}
+
+function generateShares(secret, threshold, totalShares, prime) {
+  const shares = [];
+  const coeffs = [secret];
+
+  for (let i = 1; i < threshold; i++) {
+    coeffs.push(crypto.randomInt(1, prime));
+  }
+
+  for (let i = 1; i <= totalShares; i++) {
+    const x = i;
+    let y = 0;
+    for (let j = 0; j < coeffs.length; j++) {
+      y = (y + coeffs[j] * Math.pow(x, j)) % prime;
+    }
+    shares.push({ x, y });
+  }
+  return shares;
+}
+
+function reconstructSecret(shares, prime) {
+  let secret = 0;
+  for (let i = 0; i < shares.length; i++) {
+    let xi = shares[i].x;
+    let yi = shares[i].y;
+
+    let numerator = 1;
+    let denominator = 1;
+
+    for (let j = 0; j < shares.length; j++) {
+      if (i !== j) {
+        let xj = shares[j].x;
+        numerator = (numerator * -xj) % prime;
+        denominator = (denominator * (xi - xj)) % prime;
+      }
+    }
+    const invDen = modInverse(denominator, prime);
+    const lagrangeCoef = (yi * numerator * invDen) % prime;
+    secret = (prime + secret + lagrangeCoef) % prime;
+  }
+  return secret;
+}
+
+function modInverse(k, prime) {
+  const [g, u, v] = extendedEuclidean(k, prime);
+  if (g !== 1) throw new Error("Нет обратного элемента");
+  return ((u % prime) + prime) % prime;
 }
 
 async function testModExp() {
@@ -377,6 +427,80 @@ async function diffieHellmanKeyExchange() {
   console.log(`\nОбщий ключ (shared secret): ${sharedKey}`);
   console.log(`Публичные ключи:\nY1 = ${Y1}\nY2 = ${Y2}\n`);
 }
+
+async function secretShareEncrypt() {
+  const filepath = await askQuestion("Введите путь к файлу для шифрования: ");
+  const data = fs.readFileSync(filepath);
+  const hash = crypto.createHash("sha256").update(data).digest("hex");
+  const secret = parseInt(hash.slice(0, 8), 16);
+
+  let p;
+  const pInput = await askQuestion(
+    "Введите простое число p (или оставьте пустым для генерации): "
+  );
+  if (pInput.trim() === "") {
+    p = generatePrime(10007, 20000);
+    console.log(`Сгенерировано p: ${p}`);
+  } else {
+    p = parseInt(pInput);
+  }
+
+  const thresholdInput = await askQuestion(
+    "Введите минимальную часть для восстановления (threshold): "
+  );
+  const threshold = parseInt(thresholdInput);
+  const totalSharesInput = await askQuestion(
+    "Введите общее число частей (totalShares): "
+  );
+  const totalShares = parseInt(totalSharesInput);
+
+  const shares = generateShares(secret, threshold, totalShares, p);
+  for (let i = 0; i < shares.length; i++) {
+    const shareData = `x:${shares[i].x}, y:${shares[i].y}`;
+    fs.writeFileSync(`share_${i + 1}.txt`, shareData);
+  }
+  console.log(
+    `Создано ${shares.length} частей файла. Для восстановления требуется минимум ${threshold} частей.`
+  );
+}
+
+async function secretShareDecrypt() {
+  const shareCount = await askQuestion(
+    "Введите число частей для восстановления: "
+  );
+  const count = parseInt(shareCount);
+  const shares = [];
+
+  for (let i = 0; i < count; i++) {
+    const filename = await askQuestion(
+      `Введите имя части ${i + 1} (например, share_1.txt): `
+    );
+    const content = fs.readFileSync(filename, "utf-8");
+    const matchX = content.match(/x:(\d+)/);
+    const matchY = content.match(/y:(\d+)/);
+    if (matchX && matchY) {
+      shares.push({ x: parseInt(matchX[1]), y: parseInt(matchY[1]) });
+    } else {
+      console.log("Некорректный формат файла части");
+      return;
+    }
+  }
+  const pInput = await askQuestion(
+    "Введите p (если знаете, оставьте пустым для ввода): "
+  );
+  let p;
+  if (pInput.trim() === "") {
+    p = parseInt(await askQuestion("Введите p: "));
+  } else {
+    p = parseInt(pInput);
+  }
+
+  const secret = reconstructSecret(shares, p);
+  console.log(`Восстановленный секрет: ${secret}`);
+  // Тут можно реализовать восстановление файла из секрета, если есть логика
+  // Например, если секрет — хэш файла, то можно искать или восстанавливать файл
+}
+
 async function showMenu() {
   console.log("=== КРИПТОГРАФИЧЕСКАЯ БИБЛИОТЕКА ===");
   console.log("1. Быстрое возведение в степень по модулю");
@@ -385,9 +509,11 @@ async function showMenu() {
   console.log("4. Генерация простого числа");
   console.log("5. Нахождение дискретного логарифма");
   console.log("6. Построение общего ключа по схеме Диффи-Хеллмана");
+  console.log("7. Шифрование файла (разделение секрета)");
+  console.log("8. Восстановление файла из частей");
   console.log("0. Выход");
 
-  const choice = await askQuestion("\nВыберите опцию (0-6): ");
+  const choice = await askQuestion("\nВыберите опцию (0-8): ");
 
   switch (choice) {
     case "1":
@@ -407,6 +533,12 @@ async function showMenu() {
       break;
     case "6":
       await diffieHellmanKeyExchange();
+      break;
+    case "7":
+      await secretShareEncrypt();
+      break;
+    case "8":
+      await secretShareDecrypt();
       break;
     case "0":
       console.log("До свидания!");
